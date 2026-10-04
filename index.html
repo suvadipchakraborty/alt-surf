@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Alt-Surf: find alternatives to any website</title>
+  <meta name="description" content="Type any website and Alt-Surf shows you similar sites and alternatives worth visiting. Escape the algorithmic bubble.">
+  <meta name="theme-color" content="#5b4df5">
+  <meta name="color-scheme" content="light">
+  <link rel="canonical" href="https://alt-surf.suvadipchakraborty.workers.dev/">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Alt-Surf">
+  <meta property="og:title" content="Alt-Surf: find alternatives to any website">
+  <meta property="og:description" content="Type any website and discover similar sites and alternatives. Escape the algorithmic bubble.">
+  <meta property="og:url" content="https://alt-surf.suvadipchakraborty.workers.dev/">
+  <meta property="og:image" content="https://alt-surf.suvadipchakraborty.workers.dev/preview.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Alt-Surf: find alternatives to any website">
+
+  <!-- Twitter / X -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Alt-Surf: find alternatives to any website">
+  <meta name="twitter:description" content="Type any website and discover similar sites and alternatives.">
+  <meta name="twitter:image" content="https://alt-surf.suvadipchakraborty.workers.dev/preview.png">
+
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Alt-Surf">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+
+  <!-- Fonts (system fallbacks are defined in styles.css) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=DM+Sans:wght@400;500;600&display=swap">
+
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#search-input">Skip to search</a>
+
+  <header class="site-header">
+    <a class="brand" href="./" aria-label="Alt-Surf home">
+      <svg class="brand-mark" viewBox="0 0 48 48" aria-hidden="true">
+        <rect width="48" height="48" rx="13" fill="#5b4df5"/>
+        <path d="M32 18.5A11 11 0 1 0 32 29.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" opacity=".55"/>
+        <path d="M17 31 31 17M31 17H21.5M31 17v9.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span class="brand-name">Alt-Surf</span>
+    </a>
+    <button id="install-btn" class="btn btn-soft" type="button">
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 3v12m0 0-4.5-4.5M12 15l4.5-4.5M5 19h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Save App
+    </button>
+  </header>
+
+  <main>
+    <section class="hero" aria-labelledby="hero-title">
+      <h1 id="hero-title">What website do you want an alternative to?</h1>
+
+      <form id="search-form" class="search" role="search" autocomplete="off" novalidate>
+        <div class="search-glow" aria-hidden="true"></div>
+        <div class="search-field">
+          <svg class="search-icon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="m16 16 4.5 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          <label class="sr-only" for="search-input">Website address</label>
+          <input id="search-input" name="q" type="text" inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="netflix.com" enterkeyhint="search">
+          <button class="btn btn-primary search-submit" type="submit">Find alternatives</button>
+        </div>
+      </form>
+      <p id="form-hint" class="form-hint" role="alert" hidden></p>
+    </section>
+
+    <!-- Empty state -->
+    <section id="view-empty" class="view empty" aria-labelledby="empty-title">
+      <div class="bubble-scene" aria-hidden="true">
+        <div class="bubble">
+          <img class="tile t-a" src="https://www.google.com/s2/favicons?domain=google.com&sz=128" alt="" width="52" height="52">
+          <img class="tile t-b" src="https://www.google.com/s2/favicons?domain=youtube.com&sz=128" alt="" width="52" height="52">
+          <img class="tile t-c" src="https://www.google.com/s2/favicons?domain=facebook.com&sz=128" alt="" width="52" height="52">
+        </div>
+        <img class="tile free f-a" src="https://www.google.com/s2/favicons?domain=duckduckgo.com&sz=128" alt="" width="52" height="52">
+        <img class="tile free f-b" src="https://www.google.com/s2/favicons?domain=wikipedia.org&sz=128" alt="" width="52" height="52">
+        <img class="tile free f-c" src="https://www.google.com/s2/favicons?domain=archive.org&sz=128" alt="" width="52" height="52">
+      </div>
+      <h2 id="empty-title">Type a website above to escape the algorithmic bubble</h2>
+      <p class="empty-sub">Or try one of these:</p>
+      <ul class="examples" id="examples">
+        <li><button type="button" class="chip" data-domain="netflix.com">netflix.com</button></li>
+        <li><button type="button" class="chip" data-domain="reddit.com">reddit.com</button></li>
+        <li><button type="button" class="chip" data-domain="notion.so">notion.so</button></li>
+        <li><button type="button" class="chip" data-domain="spotify.com">spotify.com</button></li>
+      </ul>
+    </section>
+
+    <!-- Loading skeletons -->
+    <section id="view-loading" class="view" hidden aria-busy="true" aria-label="Loading alternatives">
+      <div class="results-head skeleton-head"><span class="sk sk-line w40"></span></div>
+      <div class="grid" id="skeleton-grid"></div>
+    </section>
+
+    <!-- Results -->
+    <section id="view-results" class="view" hidden aria-live="polite">
+      <div class="results-head">
+        <div class="results-title">
+          <img id="results-favicon" class="results-favicon" alt="" width="40" height="40">
+          <div>
+            <h2 id="results-heading"></h2>
+            <p id="results-sub" class="results-sub"></p>
+          </div>
+        </div>
+        <button id="share-btn" class="btn btn-soft" type="button" aria-label="Share these results">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 15V4m0 0L8 8m4-4 4 4M6 12v6.5A1.5 1.5 0 0 0 7.5 20h9a1.5 1.5 0 0 0 1.5-1.5V12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Share
+        </button>
+      </div>
+      <div class="grid" id="results-grid"></div>
+    </section>
+
+    <!-- Error / no results -->
+    <section id="view-error" class="view message" hidden role="alert">
+      <div class="message-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="30" height="30"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 7.5v5.5M12 16.5v.01" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+      </div>
+      <h2 id="error-title"></h2>
+      <p id="error-text"></p>
+      <button id="retry-btn" class="btn btn-primary" type="button" hidden>Try again</button>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p>Built by Suva</p>
+    <a href="mailto:suvadipchakraborty@gmail.com?subject=Alt-Surf%20feedback">Send feedback</a>
+  </footer>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <noscript><p class="noscript">Alt-Surf needs JavaScript to search for alternatives.</p></noscript>
+  <script src="app.js" defer></script>
+</body>
+</html>
