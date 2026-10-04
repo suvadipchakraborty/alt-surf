@@ -1,18 +1,28 @@
 /* ==========================================================================
-   Alt-Surf: website discovery engine
+   Alt-Surf: website discovery engine (powered by Google Gemini)
    Vanilla ES6+, no build step.
    ========================================================================== */
 
 /* ---------- Configuration ---------- */
 const CONFIG = {
-  rapidApiKey: '4b5e07f3b7mshf2a4404a417af94p168eb3jsne4eab8a39882',
-  rapidApiHost: 'similarsitecheck.p.rapidapi.com',
-  endpoint: 'https://similarsitecheck.p.rapidapi.com/similarsites',
-  queryParam: 'url',                 // change here if the endpoint expects a different parameter name
+  // >>> GEMINI API KEY: paste/replace your key here. <<<
+  // This is a static site, so the key is visible to visitors. In Google AI Studio / Cloud Console,
+  // restrict it to your site's HTTP referrer and to the Generative Language API only.
+  GEMINI_API_KEY: 'AQ.Ab8RN6KJPYrgyvXWPApXQbipAr2yu9jUKgl0D3WW1SD21IgtNA',
+
+  // Tried in order. If a model is retired (404) the next one is used automatically.
+  // gemini-1.5-flash has been shut down by Google, so it is not used.
+  MODELS: ['gemini-flash-latest', 'gemini-3.5-flash', 'gemini-2.5-flash'],
+  API_BASE: 'https://generativelanguage.googleapis.com/v1beta/models',
+
+  RESULT_COUNT: 6,
+  parseRetries: 1,                    // automatic re-asks when the AI returns unreadable JSON
+  requestTimeoutMs: 30000,
+  cacheTtlMs: 24 * 60 * 60 * 1000,    // reuse results for 24h (faster, saves quota)
+  skeletonCount: 6,
+  statusMessages: ['Analyzing competitors\u2026', 'Finding better options\u2026', 'Comparing the alternatives\u2026', 'Picking the best ones\u2026'],
+
   siteUrl: 'https://alt-surf.suvadipchakraborty.workers.dev/',
-  requestTimeoutMs: 20000,
-  cacheTtlMs: 24 * 60 * 60 * 1000,   // cache results for 24h to save API quota
-  skeletonCount: 8,
 };
 
 /* ---------- Helpers ---------- */
@@ -63,28 +73,49 @@ function el(tag, attrs = {}, children = []) {
   return node;
 }
 
-/* ---------- API layer ---------- */
+/* ---------- Gemini engine (LLM as a database) ---------- */
 class ApiError extends Error {
   constructor(kind, message) {
     super(message);
-    this.kind = kind; // 'rate-limit' | 'auth' | 'network' | 'timeout' | 'server' | 'empty'
+    this.kind = kind; // 'rate-limit' | 'auth' | 'network' | 'timeout' | 'server' | 'parse' | 'blocked' | 'empty'
   }
 }
 
-async function fetchSimilarSites(domain) {
-  const url = `${CONFIG.endpoint}?${CONFIG.queryParam}=${encodeURIComponent(domain)}`;
+function buildPrompt(domain) {
+  return `Return a list of ${CONFIG.RESULT_COUNT} alternative websites to ${domain}. ` +
+    `You must respond ONLY with a valid JSON array of objects. Do not include markdown formatting or code blocks. ` +
+    `Each object must have these exact keys: 'name' (string, the site name), 'domain' (string, just the domain name like example.com), ` +
+    `and 'reason' (string, a punchy 1-sentence explanation of why it is a good alternative).`;
+}
+
+const SYSTEM_INSTRUCTION =
+  'You are Alt-Surf, a careful website recommender. Only recommend real, currently operating websites. ' +
+  'Never include the site the user asked about. Output strictly valid JSON and nothing else.';
+
+async function callGemini(model, domain) {
+  const key = CONFIG.GEMINI_API_KEY;
+  if (!key || /YOUR_|PASTE_/i.test(key)) {
+    throw new ApiError('auth', 'Missing Gemini API key.');
+  }
+
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), CONFIG.requestTimeoutMs);
 
   let response;
   try {
-    response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'x-rapidapi-key': CONFIG.rapidApiKey,
-        'x-rapidapi-host': CONFIG.rapidApiHost,
-      },
+    response = await fetch(`${CONFIG.API_BASE}/${model}:generateContent`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
       signal: controller.signal,
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
+        contents: [{ role: 'user', parts: [{ text: buildPrompt(domain) }] }],
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 4096,
+          responseMimeType: 'application/json',
+        },
+      }),
     });
   } catch (err) {
     if (err.name === 'AbortError') throw new ApiError('timeout', 'The request took too long.');
@@ -93,125 +124,98 @@ async function fetchSimilarSites(domain) {
     clearTimeout(timer);
   }
 
-  if (response.status === 429) throw new ApiError('rate-limit', 'Rate limit reached.');
-  if (response.status === 401 || response.status === 403) throw new ApiError('auth', 'API key rejected.');
-  if (response.status === 404) throw new ApiError('empty', 'No data for this site.');
-  if (!response.ok) throw new ApiError('server', `Server responded with ${response.status}.`);
+  if (!response.ok) {
+    let detail = {};
+    try { detail = (await response.json()).error || {}; } catch { /* ignore */ }
+    const text = `${detail.status || ''} ${detail.message || ''}`.toLowerCase();
+    if (response.status === 404) throw new ApiError('model-missing', `Model ${model} unavailable.`);
+    if (response.status === 429 || text.includes('resource_exhausted') || text.includes('quota')) throw new ApiError('rate-limit', 'Rate limit reached.');
+    if (response.status === 401 || response.status === 403 || text.includes('api key') || text.includes('api_key')) throw new ApiError('auth', 'API key rejected.');
+    if (typeof console !== 'undefined') console.warn('[Alt-Surf] Gemini error', response.status, detail);
+    throw new ApiError('server', `Server responded with ${response.status}.`);
+  }
 
-  let json;
+  let data;
   try {
-    json = await response.json();
+    data = await response.json();
   } catch {
-    throw new ApiError('server', 'Unreadable response from the server.');
+    throw new ApiError('parse', 'Unreadable response from the server.');
   }
 
-  // Some RapidAPI APIs return 200 with an error message body.
-  if (json && typeof json === 'object' && !Array.isArray(json)) {
-    const msg = String(json.message || json.error || '').toLowerCase();
-    if (msg.includes('too many requests') || msg.includes('rate limit') || msg.includes('quota')) {
-      throw new ApiError('rate-limit', 'Rate limit reached.');
-    }
-    if (msg.includes('not subscribed') || msg.includes('invalid api key')) {
-      throw new ApiError('auth', 'API key rejected.');
-    }
+  if (data.promptFeedback && data.promptFeedback.blockReason) {
+    throw new ApiError('blocked', 'The request was blocked.');
   }
+  const candidate = data.candidates && data.candidates[0];
+  if (!candidate) throw new ApiError('parse', 'No answer returned.');
 
-  if (typeof console !== 'undefined') console.debug('[Alt-Surf] raw response', json);
-  return normalizeResponse(json, domain);
+  const text = ((candidate.content && candidate.content.parts) || [])
+    .filter((p) => typeof p.text === 'string' && !p.thought)
+    .map((p) => p.text)
+    .join('');
+  if (!text.trim()) {
+    throw new ApiError(candidate.finishReason === 'SAFETY' ? 'blocked' : 'parse', 'Empty answer.');
+  }
+  return text;
 }
 
-/* ---------- Response parsing (defensive: tolerates several JSON shapes) ---------- */
-const LIST_KEYS = ['similar_sites', 'similarSites', 'similarsites', 'similar', 'sites', 'alternatives', 'results', 'data', 'items', 'response'];
-const DOMAIN_KEYS = ['domain', 'url', 'site', 'website', 'host', 'link', 'name'];
-const SCORE_KEYS = ['similarity', 'similarity_score', 'similarityScore', 'score', 'match', 'rating'];
-const DESC_KEYS = ['description', 'desc', 'summary', 'title', 'about'];
-const TAG_KEYS = ['category', 'categories', 'tags', 'topic', 'industry'];
-
-const pick = (obj, keys) => {
-  for (const k of keys) if (obj[k] !== undefined && obj[k] !== null && obj[k] !== '') return obj[k];
-  return undefined;
-};
-
-/** Finds the list of sites inside an unknown JSON structure. */
-function findSiteList(node, depth = 0) {
-  if (node == null || depth > 4) return null;
-  if (Array.isArray(node)) return node;
-  if (typeof node !== 'object') return null;
-
-  for (const key of LIST_KEYS) {
-    if (key in node) {
-      const found = findSiteList(node[key], depth + 1);
-      if (found) return found;
-    }
+/** Turns the model's text into a clean array of {name, domain, reason}. Throws ApiError('parse') on garbage. */
+function parseSites(text, queryDomain) {
+  let s = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+  let parsed;
+  try {
+    parsed = JSON.parse(s);
+  } catch {
+    const a = s.indexOf('[');
+    const b = s.lastIndexOf(']');
+    if (a === -1 || b <= a) throw new ApiError('parse', 'Not JSON.');
+    try { parsed = JSON.parse(s.slice(a, b + 1)); } catch { throw new ApiError('parse', 'Not JSON.'); }
   }
-  // Object keyed by domain: { "hulu.com": 0.9, "max.com": { ... } }
-  const keys = Object.keys(node);
-  if (keys.length && keys.every((k) => sanitizeDomain(k))) {
-    return keys.map((k) => {
-      const v = node[k];
-      return v && typeof v === 'object' ? { domain: k, ...v } : { domain: k, score: v };
-    });
+
+  // Accept { "alternatives": [...] } style wrappers too.
+  if (!Array.isArray(parsed) && parsed && typeof parsed === 'object') {
+    parsed = Object.values(parsed).find(Array.isArray);
   }
-  // Last resort: first array-valued property
-  for (const key of keys) {
-    if (Array.isArray(node[key])) return node[key];
-  }
-  for (const key of keys) {
-    const found = findSiteList(node[key], depth + 1);
-    if (found) return found;
-  }
-  return null;
-}
+  if (!Array.isArray(parsed)) throw new ApiError('parse', 'Not an array.');
 
-function normalizeScore(raw) {
-  if (raw === undefined) return null;
-  const n = typeof raw === 'string' ? parseFloat(raw) : raw;
-  if (typeof n !== 'number' || !Number.isFinite(n) || n < 0) return null;
-  const pct = n <= 1 ? n * 100 : n;
-  return Math.min(100, Math.round(pct));
-}
-
-function normalizeItem(item) {
-  if (typeof item === 'string') {
-    const domain = sanitizeDomain(item);
-    return domain ? { domain, score: null, description: '', tags: [] } : null;
-  }
-  if (!item || typeof item !== 'object') return null;
-
-  const domain = sanitizeDomain(String(pick(item, DOMAIN_KEYS) ?? ''));
-  if (!domain) return null;
-
-  const rawTags = pick(item, TAG_KEYS);
-  const tags = (Array.isArray(rawTags) ? rawTags : rawTags ? [rawTags] : [])
-    .map((t) => String(t).trim())
-    .filter(Boolean)
-    .slice(0, 3);
-
-  const description = pick(item, DESC_KEYS);
-  return {
-    domain,
-    score: normalizeScore(pick(item, SCORE_KEYS)),
-    description: typeof description === 'string' ? description.trim() : '',
-    tags,
-  };
-}
-
-function normalizeResponse(json, queryDomain) {
-  const list = findSiteList(json);
-  if (!list) return [];
   const seen = new Set([queryDomain]);
   const sites = [];
-  for (const item of list) {
-    const site = normalizeItem(item);
-    if (!site || seen.has(site.domain)) continue;
-    seen.add(site.domain);
-    sites.push(site);
+  for (const item of parsed) {
+    if (!item || typeof item !== 'object') continue;
+    const domain = sanitizeDomain(String(item.domain || ''));
+    if (!domain || seen.has(domain)) continue;
+    seen.add(domain);
+    sites.push({
+      domain,
+      name: String(item.name || prettyName(domain)).trim().slice(0, 60),
+      reason: String(item.reason || '').trim().slice(0, 300),
+    });
   }
+  if (!sites.length) throw new ApiError('parse', 'No valid sites.');
   return sites;
 }
 
+async function fetchAlternatives(domain) {
+  let lastError = new ApiError('server', 'Unknown error.');
+  for (const model of CONFIG.MODELS) {
+    for (let attempt = 0; attempt <= CONFIG.parseRetries; attempt++) {
+      try {
+        const text = await callGemini(model, domain);
+        if (typeof console !== 'undefined') console.debug(`[Alt-Surf] ${model} raw output`, text);
+        return parseSites(text, domain);
+      } catch (err) {
+        if (!(err instanceof ApiError)) throw err;
+        lastError = err;
+        if (err.kind === 'parse') continue;          // ask the same model once more
+        if (err.kind === 'model-missing') break;      // try the next model
+        throw err;                                    // auth, rate-limit, network, ...
+      }
+    }
+  }
+  throw lastError.kind === 'model-missing' ? new ApiError('server', 'No Gemini model available.') : lastError;
+}
+
 /* ---------- Cache ---------- */
-const cacheKey = (domain) => `altsurf:v1:${domain}`;
+const cacheKey = (domain) => `altsurf:v2:${domain}`;
 
 function readCache(domain) {
   try {
@@ -251,6 +255,23 @@ function toast(message, ms = 3200) {
   toast.timer = setTimeout(() => { node.hidden = true; }, ms);
 }
 
+/* Pulsing status text while Gemini thinks */
+let statusTimer = null;
+function startStatus() {
+  stopStatus();
+  const node = $('status-text');
+  let i = 0;
+  node.textContent = CONFIG.statusMessages[0];
+  statusTimer = setInterval(() => {
+    i = (i + 1) % CONFIG.statusMessages.length;
+    node.textContent = CONFIG.statusMessages[i];
+  }, 1800);
+}
+function stopStatus() {
+  clearInterval(statusTimer);
+  statusTimer = null;
+}
+
 function renderSkeletons() {
   const grid = $('skeleton-grid');
   grid.replaceChildren();
@@ -259,7 +280,7 @@ function renderSkeletons() {
       el('article', { class: 'card is-skeleton', 'aria-hidden': 'true' }, [
         el('div', { class: 'card-top' }, [
           el('span', { class: 'sk sk-logo' }),
-          el('span', { class: 'sk sk-line w60' }),
+          el('div', { class: 'sk-stack' }, [el('span', { class: 'sk sk-line w60' }), el('span', { class: 'sk sk-line w40' })]),
         ]),
         el('span', { class: 'sk sk-line w90' }),
         el('span', { class: 'sk sk-line w70' }),
@@ -281,28 +302,26 @@ function buildLogo(domain) {
 }
 
 function buildCard(site, index) {
-  const tags = [];
-  if (site.score !== null) tags.push(el('span', { class: 'tag', text: `${site.score}% similar` }));
-  for (const t of site.tags) tags.push(el('span', { class: 'tag tag-plain', text: t }));
-
   const external = el('a', {
     class: 'btn btn-primary', href: `https://${site.domain}`,
     target: '_blank', rel: 'noopener noreferrer',
-    'aria-label': `Visit ${site.domain} (opens in a new tab)`,
+    'aria-label': `Visit ${site.name} (opens in a new tab)`,
     text: 'Visit Site',
   });
   const explore = el('button', {
     class: 'btn btn-ghost', type: 'button', 'data-domain': site.domain,
-    'aria-label': `Find alternatives to ${site.domain}`, text: 'Alternatives',
+    'aria-label': `Find alternatives to ${site.name}`, text: 'Alternatives',
   });
 
   return el('article', { class: 'card', style: `--i:${index}` }, [
-    el('div', { class: 'card-top' }, [buildLogo(site.domain), el('h3', { class: 'card-domain', text: site.domain })]),
-    site.description ? el('p', { class: 'card-desc', text: site.description }) : null,
-    tags.length ? el('div', { class: 'tags' }, tags) : null,
-    site.score !== null
-      ? el('div', { class: 'meter', 'aria-hidden': 'true' }, [el('span', { style: `width:${site.score}%` })])
-      : null,
+    el('div', { class: 'card-top' }, [
+      buildLogo(site.domain),
+      el('div', { class: 'card-id' }, [
+        el('h3', { class: 'card-domain', text: site.name }),
+        el('p', { class: 'card-host', text: site.domain }),
+      ]),
+    ]),
+    site.reason ? el('p', { class: 'card-reason', text: site.reason }) : null,
     el('div', { class: 'card-actions' }, [external, explore]),
   ]);
 }
@@ -315,33 +334,28 @@ function renderResults(domain, sites) {
 
   $('results-favicon').src = faviconUrl(domain);
   $('results-heading').textContent = `${sites.length} alternative${sites.length === 1 ? '' : 's'} to ${domain}`;
-  $('results-sub').textContent = `Sites similar to ${name}, ready to explore.`;
+  $('results-sub').textContent = 'Each pick comes with the reason it earns its spot.';
 
-  const grid = $('results-grid');
-  grid.replaceChildren(...sites.map(buildCard));
+  $('results-grid').replaceChildren(...sites.map(buildCard));
   document.title = `Alternatives to ${name}: Alt-Surf`;
   showView('results');
 }
 
 const ERROR_COPY = {
-  'rate-limit': ['Search limit reached', 'The API has hit its request limit for now. Wait a minute and try again, or check your RapidAPI plan.', true],
-  auth: ['API key problem', 'RapidAPI rejected the key. Check that the key is correct and subscribed to the Similarsitecheck API.', false],
+  parse: ['The AI got its wires crossed', 'Gemini replied in a format we couldn\u2019t read. It happens now and then, so give it another go.', true],
+  'rate-limit': ['Too many searches right now', 'The Gemini API hit its request limit. Wait a minute and try again.', true],
+  auth: ['API key problem', 'Google rejected the Gemini API key. Check that it is correct, enabled for the Generative Language API, and allowed for this site\u2019s address.', false],
   network: ['Can\u2019t reach the server', 'Check your internet connection and try again.', true],
-  timeout: ['That took too long', 'The search timed out. Try again in a moment.', true],
-  server: ['Something went wrong', 'The API returned an unexpected response. Try again shortly.', true],
+  timeout: ['That took too long', 'Gemini didn\u2019t answer in time. Try again in a moment.', true],
+  blocked: ['No answer for that one', 'Gemini declined to suggest alternatives for this site. Try a different one.', false],
+  server: ['Something went wrong', 'The Gemini API returned an unexpected error. Try again shortly.', true],
 };
 
-function renderError(kind, domain) {
-  if (kind === 'empty') {
-    $('error-title').textContent = `No alternatives found for ${domain}`;
-    $('error-text').textContent = 'The API has no similar sites for this one yet. Try a more popular website or check the spelling.';
-    $('retry-btn').hidden = true;
-  } else {
-    const [title, text, canRetry] = ERROR_COPY[kind] || ERROR_COPY.server;
-    $('error-title').textContent = title;
-    $('error-text').textContent = text;
-    $('retry-btn').hidden = !canRetry;
-  }
+function renderError(kind) {
+  const [title, text, canRetry] = ERROR_COPY[kind] || ERROR_COPY.server;
+  $('error-title').textContent = title;
+  $('error-text').textContent = text;
+  $('retry-btn').hidden = !canRetry;
   showView('error');
 }
 
@@ -351,7 +365,7 @@ let searchToken = 0;
 async function search(rawInput, { pushUrl = true } = {}) {
   const domain = sanitizeDomain(rawInput);
   if (!domain) {
-    showHint('That doesn\u2019t look like a website. Try something like netflix.com');
+    showHint('That doesn\u2019t look like a website. Try something like reddit.com');
     $('search-input').focus();
     return;
   }
@@ -372,22 +386,25 @@ async function search(rawInput, { pushUrl = true } = {}) {
 
   const cached = readCache(domain);
   if (cached && cached.length) {
+    stopStatus();
     renderResults(domain, cached);
     return;
   }
 
   renderSkeletons();
+  startStatus();
   showView('loading');
 
   try {
-    const sites = await fetchSimilarSites(domain);
+    const sites = await fetchAlternatives(domain);
     if (token !== searchToken) return; // a newer search superseded this one
-    if (!sites.length) return renderError('empty', domain);
+    stopStatus();
     writeCache(domain, sites);
     renderResults(domain, sites);
   } catch (err) {
     if (token !== searchToken) return;
-    renderError(err instanceof ApiError ? err.kind : 'server', domain);
+    stopStatus();
+    renderError(err instanceof ApiError ? err.kind : 'server');
   }
 }
 
@@ -478,7 +495,7 @@ $('results-grid').addEventListener('click', (e) => {
 $('retry-btn').addEventListener('click', () => search(current.domain || $('search-input').value));
 $('share-btn').addEventListener('click', shareResults);
 
-// Deep links: https://.../?q=netflix.com
+// Deep links: https://.../?q=reddit.com
 const initial = new URLSearchParams(location.search).get('q');
 if (initial) search(initial, { pushUrl: false });
 else showView('empty');

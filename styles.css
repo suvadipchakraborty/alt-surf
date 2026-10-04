@@ -105,7 +105,7 @@ button { font: inherit; color: inherit; }
   font-weight: 800;
   font-size: clamp(2.1rem, 6vw, 3.6rem);
   line-height: 1.04;
-  max-width: 15ch;
+  max-width: 13ch;
   margin: 0 auto 32px;
   text-wrap: balance;
 }
@@ -316,3 +316,16 @@ button { font: inherit; color: inherit; }
   *, *::before, *::after { animation: none !important; transition-duration: .01ms !important; }
   .card:hover, .chip:hover { transform: none; }
 }
+
+/* ---------- Gemini version additions ---------- */
+.card-id { min-width: 0; }
+.card-host { margin: 2px 0 0; color: var(--muted); font-size: .9rem; overflow-wrap: anywhere; }
+.card-reason { margin: 0; color: var(--ink); font-size: 1rem; line-height: 1.5; }
+
+.status-text {
+  margin: 28px 0 20px; text-align: center; font: 600 1.15rem var(--font-display); color: var(--accent-ink);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+@keyframes pulse { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }
+.sk-stack { display: flex; flex-direction: column; gap: 10px; flex: 1; }
+.card.is-skeleton .card-top { align-items: center; }

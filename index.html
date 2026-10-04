@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Alt-Surf: find alternatives to any website</title>
-  <meta name="description" content="Type any website and Alt-Surf shows you similar sites and alternatives worth visiting. Escape the algorithmic bubble.">
+  <meta name="description" content="Bored of a website? Type it in and Alt-Surf suggests better alternatives, each with a reason why. Escape the algorithmic bubble.">
   <meta name="theme-color" content="#5b4df5">
   <meta name="color-scheme" content="light">
   <link rel="canonical" href="https://alt-surf.suvadipchakraborty.workers.dev/">
@@ -13,7 +13,7 @@
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Alt-Surf">
   <meta property="og:title" content="Alt-Surf: find alternatives to any website">
-  <meta property="og:description" content="Type any website and discover similar sites and alternatives. Escape the algorithmic bubble.">
+  <meta property="og:description" content="Bored of a website? Discover alternatives, each with a reason why. Escape the algorithmic bubble.">
   <meta property="og:url" content="https://alt-surf.suvadipchakraborty.workers.dev/">
   <meta property="og:image" content="https://alt-surf.suvadipchakraborty.workers.dev/preview.png">
   <meta property="og:image:width" content="1200">
@@ -23,7 +23,7 @@
   <!-- Twitter / X -->
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Alt-Surf: find alternatives to any website">
-  <meta name="twitter:description" content="Type any website and discover similar sites and alternatives.">
+  <meta name="twitter:description" content="Bored of a website? Discover alternatives, each with a reason why.">
   <meta name="twitter:image" content="https://alt-surf.suvadipchakraborty.workers.dev/preview.png">
 
   <!-- PWA -->
@@ -62,14 +62,14 @@
 
   <main>
     <section class="hero" aria-labelledby="hero-title">
-      <h1 id="hero-title">What website do you want an alternative to?</h1>
+      <h1 id="hero-title">What website are you bored of?</h1>
 
       <form id="search-form" class="search" role="search" autocomplete="off" novalidate>
         <div class="search-glow" aria-hidden="true"></div>
         <div class="search-field">
           <svg class="search-icon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="m16 16 4.5 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
           <label class="sr-only" for="search-input">Website address</label>
-          <input id="search-input" name="q" type="text" inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="netflix.com" enterkeyhint="search">
+          <input id="search-input" name="q" type="text" inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="reddit.com" enterkeyhint="search">
           <button class="btn btn-primary search-submit" type="submit">Find alternatives</button>
         </div>
       </form>
@@ -99,8 +99,8 @@
     </section>
 
     <!-- Loading skeletons -->
-    <section id="view-loading" class="view" hidden aria-busy="true" aria-label="Loading alternatives">
-      <div class="results-head skeleton-head"><span class="sk sk-line w40"></span></div>
+    <section id="view-loading" class="view" hidden aria-busy="true" aria-label="Finding alternatives">
+      <p id="status-text" class="status-text" role="status">Analyzing competitors…</p>
       <div class="grid" id="skeleton-grid"></div>
     </section>
 

@@ -4,7 +4,7 @@
    - Cross-origin requests (RapidAPI, favicons, fonts) are never intercepted
    Bump CACHE_VERSION whenever you ship new static files. */
 
-const CACHE_VERSION = 'v1';
+const CACHE_VERSION = 'v2';
 const CACHE_NAME = `alt-surf-${CACHE_VERSION}`;
 
 const APP_SHELL = [
